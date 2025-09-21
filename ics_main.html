@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom ICS File Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Trebuchet+MS:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Trebuchet MS', sans-serif;
+            background: linear-gradient(315deg, #f5f7fa, #c3cfe2);
+        }
+        .dark body {
+             background: linear-gradient(315deg, #131823, #223344);
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(0.8) brightness(1.2);
+        }
+        .form-container {
+            animation: fadeIn 0.7s ease-in-out;
+        }
+        .form-field {
+            animation: slideIn 0.5s ease-out forwards;
+            opacity: 0;
+        }
+        .form-input-field:hover {
+             transform: translateY(-2px);
+             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        .form-input-field:focus {
+            transform: scale(1.02);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        #outputContainer.animated {
+             animation: popIn 0.5s cubic-bezier(0.68, --0.55, 0.27, 1.55) forwards;
+        }
+
+        /* Staggered animation delays for fields */
+        .form-field:nth-child(1) { animation-delay: 0.1s; }
+        .form-field:nth-child(2) { animation-delay: 0.2s; }
+        .form-field:nth-child(3) { animation-delay: 0.2s; }
+        .form-field:nth-child(4) { animation-delay: 0.3s; }
+        .form-field:nth-child(5) { animation-delay: 0.4s; }
+        .form-field:nth-child(6) { animation-delay: 0.5s; }
+        .form-field:nth-child(7) { animation-delay: 0.5s; }
+        
+        .bouncy-transition {
+             transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55) !important;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen px-4 py-8 transition-colors duration-300">
+
+    <div id="app-container" class="w-full max-w-2xl mx-auto">
+        <div id="download-notice" class="hidden text-center p-12 bg-white/90 dark:bg-[#12233f]/90 backdrop-blur-lg rounded-2xl shadow-2xl">
+            <h1 class="text-4xl font-bold text-[#1b3055] dark:text-white">Downloading Event...</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">Your calendar file download should begin automatically.</p>
+        </div>
+
+        <div id="invalid-link-notice" class="hidden text-center p-12 bg-white/90 dark:bg-[#12233f]/90 backdrop-blur-lg rounded-2xl shadow-2xl">
+            <h1 class="text-4xl font-bold text-[#1b3055] dark:text-white">Invalid Link</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">The link you used is not a valid event link.</p>
+        </div>
+
+        <div id="form-wrapper" class="hidden w-full bg-white/90 dark:bg-[#12233f]/90 backdrop-blur-lg rounded-2xl shadow-2xl shadow-blue-500/10 p-8 md:p-12 form-container">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center bg-blue-100 dark:bg-[#1b3055]/50 rounded-full w-20 h-20 mb-4 transition-transform duration-500 ease-out hover:rotate-12 hover:scale-110 bouncy-transition">
+                    <svg class="w-10 h-10 text-[#1b3055] dark:text-blue-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0h18M12 12.75h.008v.008H12v-.008z" />
+                    </svg>
+                </div>
+                <h1 class="text-4xl font-bold text-[#1b3055] dark:text-white">ICS Event Generator</h1>
+                <p class="text-gray-500 dark:text-gray-400 mt-2">Create a shareable calendar event link.</p>
+            </div>
+
+            <!-- Form -->
+            <form id="eventForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Event Title -->
+                <div class="md:col-span-2 form-field">
+                    <label for="eventTitle" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Event Title</label>
+                    <input type="text" id="eventTitle" required class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300" placeholder="e.g., Project Phoenix Launch">
+                </div>
+
+                <!-- Start Date & Time -->
+                <div class="form-field">
+                    <label for="startDate_date" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Start Date & Time</label>
+                    <div class="flex gap-2">
+                        <input type="date" id="startDate_date" required class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300">
+                        <input type="time" id="startDate_time" required class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300">
+                    </div>
+                </div>
+
+                <!-- End Date & Time -->
+                <div class="form-field">
+                    <label for="endDate_date" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">End Date & Time</label>
+                     <div class="flex gap-2">
+                        <input type="date" id="endDate_date" required class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300">
+                        <input type="time" id="endDate_time" required class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300">
+                    </div>
+                </div>
+                
+                <!-- Location -->
+                <div class="md:col-span-2 form-field">
+                    <label for="location" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Location</label>
+                    <input type="text" id="location" class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300" placeholder="e.g., Board Room or Virtual Link">
+                </div>
+
+                <!-- Description -->
+                <div class="md:col-span-2 form-field">
+                    <label for="description" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Description</label>
+                    <textarea id="description" rows="4" class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300" placeholder="Add some details about the event..."></textarea>
+                </div>
+                
+                <!-- Organizer Name -->
+                <div class="form-field">
+                    <label for="organizerName" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Organizer Name</label>
+                    <input type="text" id="organizerName" class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300" placeholder="e.g., Jane Doe">
+                </div>
+                
+                <!-- Organizer Email -->
+                <div class="form-field">
+                    <label for="organizerEmail" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Organizer Email</label>
+                    <input type="email" id="organizerEmail" class="form-input-field w-full bg-gray-50 dark:bg-[#0d1829] border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg p-3 focus:ring-2 focus:ring-[#63a4ff] focus:border-[#63a4ff] transition-all duration-300" placeholder="e.g., jane.doe@example.com">
+                </div>
+                
+                <!-- Submit Button -->
+                <div class="md:col-span-2 mt-4">
+                    <button type="submit" class="w-full text-white bg-[#1b3055] hover:bg-[#254275] focus:ring-4 focus:ring-[#4a7ac4]/50 font-bold rounded-lg text-lg px-5 py-3.5 text-center transition-all duration-300 transform hover:scale-105 active:scale-100">
+                        Generate Event Link
+                    </button>
+                </div>
+
+                <!-- Generated Link Output -->
+                <div id="outputContainer" class="md:col-span-2 mt-6 p-6 bg-green-50 dark:bg-green-900/40 border-2 border-dashed border-green-200 dark:border-green-700/60 rounded-lg text-center hidden">
+                    <h3 class="text-lg font-bold text-green-800 dark:text-green-200">Your Shareable Link is Ready!</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Anyone with this link will get the calendar file.</p>
+                    
+                    <div class="mt-4 relative">
+                        <input id="generatedLink" type="text" readonly class="w-full bg-white dark:bg-[#0d1829] border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 text-sm rounded-lg p-3 pr-12 truncate">
+                        <button id="copyLinkBtn" type="button" title="Copy to clipboard" class="absolute inset-y-0 right-0 flex items-center pr-3 group">
+                            <svg class="w-5 h-5 text-gray-400 group-hover:text-[#1b3055] dark:group-hover:text-white transition-colors" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" /></svg>
+                        </button>
+                    </div>
+                    <p id="copyFeedback" class="text-sm text-green-600 dark:text-green-400 mt-2 h-4 transition-opacity font-semibold"></p>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Notification Toast -->
+    <div id="notification" class="fixed top-5 right-5 bg-red-600 text-white py-3 px-6 rounded-lg shadow-xl opacity-0 translate-y-2 transition-all duration-300">
+        <p id="notification-message" class="font-bold"></p>
+    </div>
+
+    <script>
+        const toICSDate = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+        function generateICSContent(eventData) {
+            let icsContent = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Gemini//Custom ICS Generator//EN',
+                'BEGIN:VEVENT',
+                `UID:${Date.now()}-${Math.random().toString(36).substr(2, 9)}@gemini.app`,
+                `DTSTAMP:${toICSDate(new Date())}`,
+                `DTSTART:${toICSDate(new Date(eventData.start))}`,
+                `DTEND:${toICSDate(new Date(eventData.end))}`,
+                `SUMMARY:${eventData.title}`,
+                `DESCRIPTION:${eventData.description.replace(/\n/g, '\\n')}`,
+                `LOCATION:${eventData.location}`
+            ];
+
+            if (eventData.orgName && eventData.orgEmail) {
+                icsContent.push(`ORGANIZER;CN="${eventData.orgName}":mailto:${eventData.orgEmail}`);
+            }
+
+            icsContent.push('END:VEVENT', 'END:VCALENDAR');
+            return icsContent.join('\r\n');
+        }
+
+        function downloadICS(icsFileContent, title) {
+            const blob = new Blob([icsFileContent], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const safeFilename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            link.download = `${safeFilename || 'event'}.ics`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash;
+            const params = new URLSearchParams(window.location.search);
+            const mode = params.get('mode');
+
+            const formWrapper = document.getElementById('form-wrapper');
+            const downloadNotice = document.getElementById('download-notice');
+            const invalidLinkNotice = document.getElementById('invalid-link-notice');
+
+            if (hash) {
+                try {
+                    const compressedData = window.location.hash.substring(1);
+                    const jsonData = LZString.decompressFromEncodedURIComponent(compressedData);
+                    if (!jsonData) throw new Error("Decompression failed");
+                    const eventData = JSON.parse(jsonData);
+
+                    const icsContent = generateICSContent(eventData);
+                    downloadICS(icsContent, eventData.title);
+
+                    downloadNotice.classList.remove('hidden');
+
+                    // Clean up URL
+                    history.replaceState(null, null, ' ');
+
+                } catch (e) {
+                    console.error("Failed to parse event data from URL:", e);
+                    invalidLinkNotice.classList.remove('hidden');
+                }
+            } else if (mode === 'aadityagoyalfuckyou') {
+                formWrapper.classList.remove('hidden');
+
+                const eventForm = document.getElementById('eventForm');
+                const outputContainer = document.getElementById('outputContainer');
+                
+                const startDateDateInput = document.getElementById('startDate_date');
+                const startDateTimeControl = document.getElementById('startDate_time');
+                const endDateDateInput = document.getElementById('endDate_date');
+                const endDateTimeControl = document.getElementById('endDate_time');
+
+                // Set default dates to be today
+                const now = new Date();
+                const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+
+                startDateDateInput.value = now.toISOString().split('T')[0];
+                startDateTimeControl.value = now.toTimeString().slice(0, 5);
+                
+                endDateDateInput.value = oneHourLater.toISOString().split('T')[0];
+                endDateTimeControl.value = oneHourLater.toTimeString().slice(0, 5);
+
+
+                // Hide the output link if the form is changed
+                document.querySelectorAll('#eventForm input, #eventForm textarea').forEach(input => {
+                    input.addEventListener('input', () => {
+                        if (!outputContainer.classList.contains('hidden')) {
+                             outputContainer.classList.add('hidden');
+                             outputContainer.classList.remove('animated');
+                        }
+                    });
+                });
+           
+                eventForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+
+                    const eventData = {
+                        title: document.getElementById('eventTitle').value,
+                        description: document.getElementById('description').value,
+                        location: document.getElementById('location').value,
+                        orgName: document.getElementById('organizerName').value,
+                        orgEmail: document.getElementById('organizerEmail').value,
+                        start: `${document.getElementById('startDate_date').value}T${document.getElementById('startDate_time').value}`,
+                        end: `${document.getElementById('endDate_date').value}T${document.getElementById('endDate_time').value}`
+                    };
+                    
+                    const startDate = new Date(eventData.start);
+                    const endDate = new Date(eventData.end);
+
+                    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                        showNotification('Please enter valid start and end dates.');
+                        return;
+                    }
+                    if (startDate >= endDate) {
+                        showNotification('The end date must be after the start date.');
+                        return;
+                    }
+
+                    const jsonData = JSON.stringify(eventData);
+                    const compressedData = LZString.compressToEncodedURIComponent(jsonData);
+                    
+                    const shareableUrl = window.location.href.split('?')[0].split('#')[0] + '#' + compressedData;
+                    
+                    const outputContainer = document.getElementById('outputContainer');
+                    const generatedLinkInput = document.getElementById('generatedLink');
+                    
+                    generatedLinkInput.value = shareableUrl;
+                    
+                    outputContainer.classList.remove('hidden');
+                    outputContainer.classList.add('animated');
+                    outputContainer.scrollIntoView({ behavior: 'smooth' });
+                });
+
+                document.getElementById('copyLinkBtn').addEventListener('click', () => {
+                    const linkInput = document.getElementById('generatedLink');
+                    const feedbackEl = document.getElementById('copyFeedback');
+                    
+                    linkInput.select();
+                    linkInput.setSelectionRange(0, 99999); // For mobile devices
+                    
+                    try {
+                        document.execCommand('copy');
+                        feedbackEl.textContent = 'Copied to clipboard!';
+                    } catch (err) {
+                        feedbackEl.textContent = 'Failed to copy.';
+                    }
+
+                    setTimeout(() => { feedbackEl.textContent = ''; }, 2000);
+                });
+            } else {
+                 invalidLinkNotice.classList.remove('hidden');
+            }
+        });
+
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            const messageEl = document.getElementById('notification-message');
+            messageEl.textContent = message;
+            notification.classList.remove('opacity-0', 'translate-y-2');
+            setTimeout(() => { notification.classList.add('opacity-0', 'translate-y-2'); }, 3000);
+        }
+    </script>
+</body>
+</html>
+
